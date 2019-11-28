@@ -57,6 +57,8 @@ r_gender = {
     'м': 'Masc',
     'ж': 'Fem',
     'с': 'Neut',
+    'm': 'Masc',
+    'n': 'Neut',
 }
 r_person_opencorpora = {
     '1': '1per',
@@ -68,13 +70,22 @@ r_person_universalD = {
     '2': '2',
     '3': '3',
 }
+r_anim = {
+    'a': 'Anim',
+    'ina': 'Inan',
+}
 
 known_templates = ['Форма-сущ', 'Форма-гл']
+advansed_templates = ['сущ ru']
 
 def known_template(template):
     template_name = template.name.strip()
     if template_name in known_templates:
         return True
+
+    for i in advansed_templates:
+        if i in template_name:
+            return True
     return False
 
 def get_name_value(argument):
@@ -85,12 +96,12 @@ def get_name_value(argument):
 def parse_template(template, opencorpora_tag, universalD_tag):
     template_name = template.name.strip()
 
+    if 'tag' not in opencorpora_tag: opencorpora_tag['tag'] = {}
+    if 'tag' not in universalD_tag: universalD_tag['tag'] = {}
+
     if template_name == 'Форма-сущ':
         opencorpora_tag['pos'] = 'NOUN'
-        if 'tag' not in opencorpora_tag: opencorpora_tag['tag'] = {}
-
         universalD_tag['pos'] = 'NOUN'
-        if 'tag' not in universalD_tag: universalD_tag['tag'] = {}
 
         for argument in template.arguments:
             name, value = get_name_value(argument)
@@ -141,10 +152,7 @@ def parse_template(template, opencorpora_tag, universalD_tag):
 
     if template_name == 'Форма-гл':
         opencorpora_tag['pos'] = 'VERB'
-        if 'tag' not in opencorpora_tag: opencorpora_tag['tag'] = {}
-
         universalD_tag['pos'] = 'VERB'
-        if 'tag' not in universalD_tag: universalD_tag['tag'] = {}
 
         for argument in template.arguments:
             name, value = get_name_value(argument)
@@ -202,6 +210,26 @@ def parse_template(template, opencorpora_tag, universalD_tag):
 
         return
 
+    if 'сущ ru' in template_name:
+        opencorpora_tag['pos'] = 'NOUN'
+        universalD_tag['pos'] = 'NOUN'
+
+        data = template_name.split()[2:-1]
+
+        for d in data:
+            if d in r_gender:
+                opencorpora_tag['tag']['Gender'] = r_gender.get(d)
+                universalD_tag['tag']['Gender'] = r_gender.get(d)
+                continue
+
+            if d in r_anim:
+                opencorpora_tag['tag']['Animacy'] = r_anim.get(d)
+                universalD_tag['tag']['Animacy'] = r_anim.get(d)
+                continue
+
+            print(template_name, d)
+
+        return
 
     print(template_name)
     raise Exception()
