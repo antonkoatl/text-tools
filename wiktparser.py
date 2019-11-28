@@ -4,6 +4,8 @@ from pprint import pprint
 from requests import get
 import wikitextparser as wtp
 
+from wikt_template_parser import parse_template, known_template
+
 replacements_opencorpora = {'adv ru': 'ADVB',
                             'деепр ru': 'GRND',
                             'Форма-сущ': 'NOUN',
@@ -84,8 +86,13 @@ def get_wikitext_api(word, language='ru'):
 
     pages = resp['query']['pages']
     page = list(pages.values())[0]
+    data = page['revisions'][0]['*']
 
-    return page['revisions'][0]['*']
+    if 'redirect' in data.lower():
+        new_word = re.search('\[\[([́а-яёА-ЯЁ]+)\]\]', data).group(1)
+        return get_wikitext_api(new_word, language)
+
+    return data
 
 
 def accent(*words):
@@ -291,28 +298,29 @@ def get_variant_from_section(section):
 
     # search in templates
 
-    for template in section.templates:
-        pos = get_pos_from_template_name(template)
-        if pos is not None:
-            if word_acc is None or not accent(*word_acc):
-                argument = search_template_for_argument(template, 'слоги')
-                value = argument.value.rstrip()
-                word_acc = parse_slogi(value)
-
-            parse_tags_from_template(template, opencorpora_tag, universalD_tag)
-
-            break
+    # for template in section.templates:
+    #     pos = get_pos_from_template_name(template)
+    #     if pos is not None:
+    #         if word_acc is None or not accent(*word_acc):
+    #             argument = search_template_for_argument(template, 'слоги')
+    #             value = argument.value.rstrip()
+    #             word_acc = parse_slogi(value)
+    #
+    #         parse_tags_from_template(template, opencorpora_tag, universalD_tag)
+    #
+    #         break
 
     if word_acc is None or not accent(*word_acc):
         raise Exception
+
+    for template in section.templates:
+        if known_template(template):
+            parse_template(template, opencorpora_tag, universalD_tag)
 
     return [word_acc, opencorpora_tag, universalD_tag]
 
 
 def parse_wikt_ru(word):
-
-
-
     parsed = wtp.parse(get_wikitext_api(word))
 
     variants = []
@@ -335,7 +343,7 @@ def parse_wikt_en(word):
     pass
 
 if __name__ == "__main__":
-    pprint(parse_wikt_ru('мощи'))
+    pprint(parse_wikt_ru('вдали'))
 
 
 
