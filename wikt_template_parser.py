@@ -1,3 +1,8 @@
+import copy
+import re
+
+import wikitextparser as wtp
+
 r_case_opencorpora = {
     'и': 'nomn',
     'р': 'gent',
@@ -11,6 +16,12 @@ r_case_opencorpora = {
     'вин.': 'accs',
     'твор.': 'ablt',
     'пр.': 'loct',
+    'именительный': 'nomn',
+    'родительный': 'gent',
+    'дательный': 'datv',
+    'винительный': 'accs',
+    'творительный': 'ablt',
+    'предложный': 'loct',
     'именительного': 'nomn',
     'родительного': 'gent',
     'дательного': 'datv',
@@ -31,6 +42,12 @@ r_case_universalD = {
     'вин.': 'Acc',
     'твор.': 'Ins',
     'пр.': 'Loc',
+    'именительный': 'Nom',
+    'родительный': 'Gen',
+    'дательный': 'Dat',
+    'винительный': 'Acc',
+    'творительный': 'Ins',
+    'предложный': 'Loc',
     'именительного': 'Nom',
     'родительного': 'Gen',
     'дательного': 'Dat',
@@ -58,6 +75,7 @@ r_gender = {
     'ж': 'Fem',
     'с': 'Neut',
     'm': 'Masc',
+    'f': 'Fem',
     'n': 'Neut',
 }
 r_person_opencorpora = {
@@ -75,7 +93,7 @@ r_anim = {
     'ina': 'Inan',
 }
 
-known_templates = ['Форма-сущ', 'Форма-гл']
+known_templates = ['Форма-сущ', 'Форма-гл', 'conj ru']
 advansed_templates = ['сущ ru']
 
 def known_template(template):
@@ -94,6 +112,8 @@ def get_name_value(argument):
     return name, value if len(value) > 0 else None
 
 def parse_template(template, opencorpora_tag, universalD_tag):
+    from wiktparser import search_section_for_template, get_word_from_slogi, get_wikitext_api_expandtemplates
+
     template_name = template.name.strip()
 
     if 'tag' not in opencorpora_tag: opencorpora_tag['tag'] = {}
@@ -148,7 +168,7 @@ def parse_template(template, opencorpora_tag, universalD_tag):
             if name == 'слоги':
                 continue
 
-        return
+        return []
 
     if template_name == 'Форма-гл':
         opencorpora_tag['pos'] = 'VERB'
@@ -208,11 +228,29 @@ def parse_template(template, opencorpora_tag, universalD_tag):
             if name == 'слоги':
                 continue
 
-        return
+        return []
+
+    if template_name == 'conj ru':
+        opencorpora_tag['pos'] = 'CONJ'
+        universalD_tag['pos'] = 'CONJ'
+
+        t = search_section_for_template(template, 'по-слогам')
+        base = get_word_from_slogi(t)[0].replace('́', '')
+        opencorpora_tag['base'] = base
+        universalD_tag['base'] = base
+
+        return []
 
     if 'сущ ru' in template_name:
         opencorpora_tag['pos'] = 'NOUN'
         universalD_tag['pos'] = 'NOUN'
+
+        base = get_word_from_slogi(template)[0].replace('́', '')
+        opencorpora_tag['base'] = base
+        universalD_tag['base'] = base
+
+        opencorpora_tag['tag']['Number'] = r_number['ед']
+        universalD_tag['tag']['Number'] = r_number['ед']
 
         data = template_name.split()[2:-1]
 
@@ -229,7 +267,57 @@ def parse_template(template, opencorpora_tag, universalD_tag):
 
             print(template_name, d)
 
-        return
+        # склонения по падежу / числу
+        additional_variants = []
+        parsed = wtp.parse(get_wikitext_api_expandtemplates(template.string))
+        table = parsed.tables[0].data()
+        header = table.pop(0)
+        for row in table:
+            case = re.match(r'\[\[([а-яё.]+)(\||\]\])', row[0]).group(1)
+            m = re.fullmatch(r'([́а-яёА-ЯЁ]+)', row[1])
+            if m is None: m = re.search(r'>([́а-яёА-ЯЁ]+)<', row[1])
+
+            if m is not None:
+                sing = [m.group(1)]
+            else:
+                splits = row[1].split('<br/>')
+                if len(splits) > 1:
+                    sing = splits
+                else:
+                    raise Exception
+
+            m = re.fullmatch(r'([́а-яёА-ЯЁ]+)', row[2])
+            if m is None: m = re.search(r'>([́а-яёА-ЯЁ]+)<', row[2])
+
+            if m is not None:
+                plur = [m.group(1)]
+            else:
+                splits = row[2].split('<br/>')
+                if len(splits) > 1:
+                    plur = splits
+                else:
+                    raise Exception
+
+            if r_case_opencorpora[case]  != 'nomn':
+                opencorpora_tag_copy = copy.deepcopy(opencorpora_tag)
+                universalD_tag_copy = copy.deepcopy(universalD_tag)
+                opencorpora_tag_copy['tag']['Case'] = r_case_opencorpora[case]
+                universalD_tag_copy['tag']['Case'] = r_case_universalD[case]
+                opencorpora_tag_copy['tag']['Number'] = r_number['ед']
+                universalD_tag_copy['tag']['Number'] = r_number['ед']
+                additional_variants.append([sing, opencorpora_tag_copy, universalD_tag_copy])
+
+            opencorpora_tag_copy = copy.deepcopy(opencorpora_tag)
+            universalD_tag_copy = copy.deepcopy(universalD_tag)
+            opencorpora_tag_copy['tag']['Case'] = r_case_opencorpora[case]
+            universalD_tag_copy['tag']['Case'] = r_case_universalD[case]
+            opencorpora_tag_copy['tag']['Number'] = r_number['мн']
+            universalD_tag_copy['tag']['Number'] = r_number['мн']
+            additional_variants.append([plur, opencorpora_tag_copy, universalD_tag_copy])
+
+
+
+        return additional_variants
 
     print(template_name)
     raise Exception()

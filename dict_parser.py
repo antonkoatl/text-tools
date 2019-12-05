@@ -97,22 +97,22 @@ class Parser():
         self.changed = False
 
     def load(self):
-        with open(r'C:\Users\Astw\PycharmProjects\text-tools\accents.pickle', 'rb') as f:
+        with open(r'accents.pickle', 'rb') as f:
             self.accents = pickle.load(f)
-        with open(r'C:\Users\Astw\PycharmProjects\text-tools\homographs.pickle', 'rb') as f:
+        with open(r'homographs.pickle', 'rb') as f:
             self.homographs = pickle.load(f)
-        with open(r'C:\Users\Astw\PycharmProjects\text-tools\homographs2.pickle', 'rb') as f:
+        with open(r'homographs2.pickle', 'rb') as f:
             self.homographs2 = set(pickle.load(f))
 
         self.start_size = (len(self.accents), len(self.homographs), len(self.homographs2))
         print(*self.start_size)
 
     def save(self):
-        with open(r'C:\Users\Astw\PycharmProjects\text-tools\accents.pickle', 'wb') as f:
+        with open(r'accents.pickle', 'wb') as f:
             pickle.dump(self.accents, f)
-        with open(r'C:\Users\Astw\PycharmProjects\text-tools\homographs.pickle', 'wb') as f:
+        with open(r'homographs.pickle', 'wb') as f:
             pickle.dump(self.homographs, f)
-        with open(r'C:\Users\Astw\PycharmProjects\text-tools\homographs2.pickle', 'wb') as f:
+        with open(r'homographs2.pickle', 'wb') as f:
             pickle.dump(self.homographs2, f)
 
         print(len(self.accents) - self.start_size[0], len(self.homographs) - self.start_size[1], len(self.homographs2) - self.start_size[2])
@@ -126,13 +126,65 @@ class Parser():
                 if p in self.homographs[word][0]:
                     if m is not None:
                         found = False
+
+                        splits = m.split()
+
+                        if len(splits) == 1:
+                            m_base = None
+                            m_pos = splits[0]
+                            m_tag = ''
+                        if len(splits) == 2:
+                            if '=' in splits[1]:
+                                m_base = None
+                                m_pos = splits[0]
+                                m_tag = splits[1]
+                            else:
+                                m_base = splits[0]
+                                m_pos = splits[1]
+                                m_tag = ''
+                        else:
+                            m_base = splits[0]
+                            m_pos = splits[1]
+                            m_tag = splits[2]
+
                         for key in self.homographs[word][1]:
-                            if compare_tags(key.split()[0], key.split()[1] if len(key.split()) > 1 else '', m.split()[0], m.split()[1] if len(m.split()) > 1 else ''):
+                            splits = key.split()
+
+                            if len(splits) == 1:
+                                base = None
+                                pos = splits[0]
+                                tag = ''
+                            if len(splits) == 2:
+                                if '=' in splits[1]:
+                                    base = None
+                                    pos = splits[0]
+                                    tag = splits[1]
+                                else:
+                                    base = splits[0]
+                                    pos = splits[1]
+                                    tag = ''
+                            else:
+                                base = splits[0]
+                                pos = splits[1]
+                                tag = splits[2]
+
+                            if compare_tags(pos, tag, m_pos, m_tag):
+                                if self.homographs[word][1][key] != p: continue
+                                if base is None and m_base is not None:
+                                    self.homographs[word][1].pop(key)
+                                    self.homographs[word][1][m] = p
+                                    self.changed = True
+                                    print('added base', m, word)
                                 found = True
                                 break
+
                         if not found:
                             # new form for same position
-                            self.homographs[word][1][m] = p
+                            if m in self.homographs[word][1]:
+                                self.homographs[word][1][m] = {self.homographs[word][1][m], p}
+                                print(self.homographs[word])
+                            else:
+                                self.homographs[word][1][m] = p
                             self.changed = True
                             print('new form', word, p, m)
 
@@ -140,7 +192,11 @@ class Parser():
                     self.homographs[word][0].add(p)
 
                     if m is not None:
-                        self.homographs[word][1][m] = p
+                        if m in self.homographs[word][1]:
+                            self.homographs[word][1][m] = {self.homographs[word][1][m], p}
+                            print(self.homographs[word])
+                        else:
+                            self.homographs[word][1][m] = p
 
                     self.changed = True
                     print('new homograph', word, p, m)

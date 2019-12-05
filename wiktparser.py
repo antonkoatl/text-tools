@@ -86,7 +86,10 @@ def get_wikitext_api(word, language='ru'):
 
     pages = resp['query']['pages']
     page = list(pages.values())[0]
-    data = page['revisions'][0]['*']
+    if 'revisions' in page:
+        data = page['revisions'][0]['*']
+    else:
+        data = ''
 
     if 'redirect' in data.lower():
         new_word = re.search('\[\[([́а-яёА-ЯЁ]+)\]\]', data).group(1)
@@ -94,6 +97,16 @@ def get_wikitext_api(word, language='ru'):
 
     return data
 
+def get_wikitext_api_expandtemplates(text, language='ru'):
+    resp = get('https://{}.wiktionary.org/w/api.php'.format(language), {
+        'action': 'expandtemplates',
+        'text': text,
+        'prop': 'wikitext',
+        'format': 'json',
+    }).json()
+
+    data = resp['expandtemplates']['wikitext']
+    return data
 
 def accent(*words):
     return all(['́' in w for w in words])
@@ -131,6 +144,26 @@ def parse_slogi(value):
 
     return word_acc
 
+def get_word_from_slogi(section):
+    template = search_section_for_template(section, 'по-слогам')
+    if template is None: template = search_section_for_template(section, 'по слогам')
+
+    word_acc = []
+    t = ''
+
+    for argument in template.arguments:
+        if re.fullmatch(r'[́а-яёА-ЯЁ]+', argument.value.strip()):
+            t += argument.value.strip()
+
+        if "\'\'и\'\'" in argument.value:
+            parts = [x.strip() for x in argument.value.split('\'\'и\'\'')]
+            t += parts[0]
+            word_acc.append(t)
+            t = parts[1]
+
+    word_acc.append(t)
+
+    return word_acc
 
 def search_template_for_argument_value(template, name):
     a = search_template_for_argument(template, name)
@@ -270,7 +303,8 @@ def get_pos_from_template_name(template,):
             return key
 
 
-def get_variant_from_section(section):
+def get_variants_from_section(section):
+    variants = []
     word_acc = None
 
     opencorpora_tag = {}
@@ -284,6 +318,9 @@ def get_variant_from_section(section):
         v = search_template_for_argument_value(t, 'ударение')
         if v is not None:
             word_acc = [v]
+
+    if word_acc is None:
+        word_acc = get_word_from_slogi(section)
 
     # # search for section
     # if word_acc is None or not accent(*word_acc):
@@ -315,9 +352,13 @@ def get_variant_from_section(section):
 
     for template in section.templates:
         if known_template(template):
-            parse_template(template, opencorpora_tag, universalD_tag)
+            addition = parse_template(template, opencorpora_tag, universalD_tag)
+            variants.append([word_acc, opencorpora_tag, universalD_tag])
+            variants += addition
+            opencorpora_tag = {}
+            universalD_tag = {}
 
-    return [word_acc, opencorpora_tag, universalD_tag]
+    return variants
 
 
 def parse_wikt_ru(word):
@@ -329,21 +370,104 @@ def parse_wikt_ru(word):
         if len(cur_section.templates) > 0 and '-ru-' in cur_section.templates[0].name:
             for section in cur_section.sections:
                 if len(section.templates) > 0 and (section.templates[0].name == 'заголовок' or section.templates[0].name == 'з'):
-                    variants.append(get_variant_from_section(section))
+                    variants += get_variants_from_section(section)
 
             if len(variants) == 0:
                 for section in cur_section.sections:
                     if section.title == ' Морфологические и синтаксические свойства ':
-                        variants.append(get_variant_from_section(section))
-
+                        variants += get_variants_from_section(section)
 
     return variants
 
 def parse_wikt_en(word):
     pass
 
+
+def dict_to_tag_UD(data):
+    tag = data['base'] + ' ' + data['pos']
+
+    if len(data['tag']) > 0:
+        tag += ' '
+        for key in data['tag']:
+            if isinstance(data['tag'][key], list):
+                pass
+            else:
+                tag += key + '=' + data['tag'][key] + '|'
+
+        tag = tag[:-1]
+
+    if len(data['tag']) > 0:
+        for key in data['tag']:
+            if isinstance(data['tag'][key], list):
+                dicts = []
+                for i in data['tag'][key]:
+                    td = data.copy()
+                    td['tag'][key] = i
+                    dicts.append(td)
+                return dicts
+
+    return tag
+
+def add_variants_dict(word, data, p):
+    m = dict_to_tag_UD(data)
+    if isinstance(m, list):
+        for d in m:
+            add_variants_dict(word, d, p)
+    else:
+        parser.add_homograph(word, [p, m])
+
+def add_variants(variants):
+    for var in variants:
+        for form in var[0]:
+            p = form.find('́')
+            word = form.replace('́', '')
+            if count_vovels(word) < 2: continue
+            if p != -1:
+                if word in parser.homographs:
+                    add_variants_dict(word, var[2], p)
+                    continue
+
+                if word in parser.accents and p != parser.accents[word]:
+                    add_variants_dict(word, var[2], p)
+                    add_variants(variants)
+                    return
+
+                if word not in parser.accents:
+                    parser.add_accent(word, p)
+                    continue
+
 if __name__ == "__main__":
-    pprint(parse_wikt_ru('вдали'))
+    from dict_parser import Parser, count_vovels
+
+    # pprint(parse_wikt_ru('вдали'))
+    parser = Parser()
+    parser.load()
+    skip = True
+    for word in list(parser.accents):
+        if word == 'абиетин': skip = False
+        if skip: continue
+        variants = parse_wikt_ru(word)
+        acc_word = word[:parser.accents[word]] + '́' + word[parser.accents[word]:]
+        print(acc_word, len(variants))
+        # pprint(variants)
+
+        add_variants(variants)
+
+        # for var in variants:
+        #     if len(var[0]) > 1:
+        #         print('Found error!')
+        #         # parser.accents.pop(word)
+        #         add_variants(variants)
+        #         break
+        #
+        #     if var[0][0] != acc_word:
+        #         print('Found error!')
+        #         # parser.accents.pop(word)
+        #         add_variants(variants)
+        #         break
+        #
+        #     print('Ok!')
+
 
 
 
