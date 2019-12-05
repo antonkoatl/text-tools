@@ -2,7 +2,7 @@ import re
 
 import pymorphy2 as pymorphy2
 
-from dict_parser import Parser, count_vovels, get_first_vovel_pos, simple_words_dawg, compare_tags
+from dict_parser import Parser, count_vovels, get_first_vovel_pos, compare_tags
 from text_prepare_sentences import prepare_sentences
 
 acc_dict = Parser()
@@ -12,8 +12,8 @@ from wiktionaryparser import WiktionaryParser
 parser = WiktionaryParser()
 parser.set_default_language('russian')
 
-import maru
-analyzer = maru.get_analyzer(tagger='rnn', lemmatizer='pymorphy')
+# import maru
+# analyzer = maru.get_analyzer(tagger='rnn', lemmatizer='pymorphy')
 
 _stress_vowels = {'á': 'а', 'ó': 'о', 'é': 'е', 'ý': 'у',
                   'а́': 'а', 'и́': 'и', 'у́': 'у', 'э́': 'э', 'о́': 'о', 'ю́': 'ю', 'я́': 'я', 'ы́': 'ы', 'е́': 'е',
@@ -45,14 +45,14 @@ def get_accent(word, words, sentence):
     if vovels == 1: return get_first_vovel_pos(word)
 
     if word in acc_dict.homographs2:
-        return -2
+        return acc_dict.accents.get(word, -2)
 
     if word in acc_dict.accents:
         return acc_dict.accents[word]
 
     if word in acc_dict.homographs:
         forms = predictor.predict(words)
-        forms2 = list(analyzer.analyze(words))
+        # forms2 = list(analyzer.analyze(words))
 
         index = -1
         for i, w in enumerate(words):
@@ -67,7 +67,7 @@ def get_accent(word, words, sentence):
                     break
 
         form = forms[index]
-        form2 = forms2[index]
+        # form2 = forms2[index]
 
         if form.score < 0.6:
             print('resolved by moprhrnn, but score is too low', word, form, sentence)
@@ -79,7 +79,7 @@ def get_accent(word, words, sentence):
                 print('resolved by moprhrnn', word, pos, sentence)
                 return pos
 
-        print(form, '\n', form2, '\n', acc_dict.homographs[word][1])
+        print(form, '\n', 'form2', '\n', acc_dict.homographs[word][1])
         return -2
 
     if word[0].isupper():
@@ -97,26 +97,26 @@ def get_accent(word, words, sentence):
         else:
             print('found by wikidict, not resolved', word, wiki_data, sentence)
 
-    if len(wiki_data) > 1:
-        for item in wiki_data:
-            if item.count('+') == 1:
-                pos = item.find('+')
-                acc_dict.add_homograph(word, [pos, None])
+    # if len(wiki_data) > 1:
+    #     for item in wiki_data:
+    #         if item.count('+') == 1:
+    #             pos = item.find('+')
+    #             acc_dict.add_homograph(word, [pos, None])
+    #
+    #     print('new variants by wikidict', word, wiki_data, sentence)
+    #     return get_accent(word, words, sentence)
 
-        print('new variants by wikidict', word, wiki_data, sentence)
-        return get_accent(word, words, sentence)
-
-    if word in simple_words_dawg:
-        pos = simple_words_dawg[word]
-        print('resolved by simple_words_dawg', word, pos, sentence)
-        return pos
+    # if word in simple_words_dawg:
+    #     pos = simple_words_dawg[word]
+    #     print('resolved by simple_words_dawg', word, pos, sentence)
+    #     return pos
 
     pos = your_accentor.do_accents([[word]])
 
     return -2
 
 if __name__ == "__main__":
-    fname = r'C:\Users\Admin\Desktop\Новая папка (2)\43\text.txt'
+    fname = r'D:\syn\NMDS\1\Азимов Айзек. Движущая сила.txt'
 
     with open(fname, encoding='utf-8') as f:
         lines = f.readlines()

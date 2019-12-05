@@ -1,12 +1,25 @@
 import argparse
 import re
 
-replacements = {'…': '...', '—': '-', '–': '-', '“': '\'', '”': '\'', '"': '\'', }
+replacements = {'…': '...', '—': '-', '–': '-', '“': '\'', '”': '\'', '"': '\'',
+                ' ': ' ', #No-Break Space
+                }
+
+transliteration = {'a': 'а', 'b': 'б', 'c': 'к', 'd': 'д', 'e': 'э', 'f': 'ф', 'g': 'ж',
+                   'h': 'х', 'i': 'и', 'j': 'дж', 'k': 'к', 'l': 'л', 'm': 'м', 'n': 'н',
+                   'o': 'о', 'p': 'п', 'q': 'кью', 'r': 'р', 's': 'с', 't': 'т', 'u': 'ю',
+                   'v': 'в', 'w': 'в', 'x': 'икс', 'y': 'й', 'z': 'з',
+                   'A': 'А', 'B': 'Б', 'C': 'К', 'D': 'Д', 'E': 'Э', 'F': 'Ф', 'G': 'Ж',
+                   'H': 'Х', 'I': 'И', 'J': 'ДЖ', 'K': 'К', 'L': 'Л', 'M': 'М', 'N': 'Н',
+                   'O': 'О', 'P': 'П', 'Q': 'КЬЮ', 'R': 'Р', 'S': 'С', 'T': 'Т', 'U': 'Ю',
+                   'V': 'В', 'W': 'В', 'X': 'ИКС', 'Y': 'Й', 'Z': 'З',
+                   }
 
 sentences = []
 p = re.compile(r'(?=\'?[А-Яа-яЁё0-9́]|- [А-ЯЁ0-9́])'
-               r'((?:[А-Яа-яЁё0-9́,\-:;\' ́]|(?:[.?!\']+ - [а-яё]))+)'
-               r'(\'?[.!?]+\'?|(?=\n))')
+               r'((?:[А-Яа-яЁё0-9́,\-:;%$\' ]|(?:[.?!\']+ - [а-яё]))+)'
+               r'(\'?[.!?]+\'?|(?=\n)|(?=$))')
+
 
 def prepare_sentences(lines):
     sentences = []
@@ -15,6 +28,13 @@ def prepare_sentences(lines):
 
         for k in replacements:
             line = line.replace(k, replacements[k])
+
+        line = line.replace(' - ', ' ')
+        line = line.replace('- ', ' ')
+        line = line.replace(' -', ' ')
+
+        for key in transliteration:
+            line = line.replace(key, transliteration[key])
 
         s = [''.join(x) for x in p.findall(line)]
 

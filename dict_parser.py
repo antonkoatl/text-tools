@@ -29,8 +29,6 @@ def get_first_vovel_pos(word):
         if c in russian_vowels:
             return i + 1
 
-d = dawg.IntDAWG()
-simple_words_dawg = d.load(r'C:\Users\Admin\PycharmProjects\russian_g2p\russian_g2p\data\simple_words.dawg')
 
 
 # accents = {}
@@ -78,6 +76,17 @@ def compare_tags(pos1, tag1, pos2, tag2):
             if tags_dict1[key] != tags_dict2[key]:
                 return False
 
+        if key == 'Case':
+            if key in tags_dict2:
+                if tags_dict1[key] != tags_dict2[key]:
+                    fl = False
+                    if tags_dict1[key] in ['Nom', 'Acc', 'Nomn'] and tags_dict2[key] in ['Nom', 'Acc']: fl = True
+                    if tags_dict1[key] in ['Gen', 'Dat', 'Ins'] and tags_dict2[key] in ['Gen', 'Dat', 'Ins']: fl = True
+                    if not fl:
+                        return False
+
+
+
     return True
 
 class Parser():
@@ -88,22 +97,22 @@ class Parser():
         self.changed = False
 
     def load(self):
-        with open('accents.pickle', 'rb') as f:
+        with open(r'C:\Users\Astw\PycharmProjects\text-tools\accents.pickle', 'rb') as f:
             self.accents = pickle.load(f)
-        with open('homographs.pickle', 'rb') as f:
+        with open(r'C:\Users\Astw\PycharmProjects\text-tools\homographs.pickle', 'rb') as f:
             self.homographs = pickle.load(f)
-        with open('homographs2.pickle', 'rb') as f:
+        with open(r'C:\Users\Astw\PycharmProjects\text-tools\homographs2.pickle', 'rb') as f:
             self.homographs2 = set(pickle.load(f))
 
         self.start_size = (len(self.accents), len(self.homographs), len(self.homographs2))
         print(*self.start_size)
 
     def save(self):
-        with open('accents.pickle', 'wb') as f:
+        with open(r'C:\Users\Astw\PycharmProjects\text-tools\accents.pickle', 'wb') as f:
             pickle.dump(self.accents, f)
-        with open('homographs.pickle', 'wb') as f:
+        with open(r'C:\Users\Astw\PycharmProjects\text-tools\homographs.pickle', 'wb') as f:
             pickle.dump(self.homographs, f)
-        with open('homographs2.pickle', 'wb') as f:
+        with open(r'C:\Users\Astw\PycharmProjects\text-tools\homographs2.pickle', 'wb') as f:
             pickle.dump(self.homographs2, f)
 
         print(len(self.accents) - self.start_size[0], len(self.homographs) - self.start_size[1], len(self.homographs2) - self.start_size[2])
@@ -286,26 +295,6 @@ def parse_hagen():
                 if re.match('^[a-яА-ЯёЁ\-\']+$', w) is None:
                     print('!!!', w)
 
-def add_some():
-    accents = ['вдали+']
-    homographs = [['вдали', [3, 'ADVB']],
-                  ['вдали', [5, 'NOUN Case=Gen|Gender=Neut|Number=Sing']],
-                  ['брови', [3, 'NOUN Case=Acc|Gender=Fem|Number=Plur']],
-                  ]
-    remove = ['вдали']
-
-    for x in remove:
-        parser.accents.pop(x, None)
-        parser.homographs.pop(x, None)
-
-    for w in accents:
-        pos = w.find('+')
-        w = w.replace('+', '')
-        parser.add_accent(w, pos)
-
-    # for w, pms in homographs:
-    #     parser.add_homograph(w, pms)
-
 def remove_some():
     accents = ['молча']
     homographs = [['молча', [3, '']],
@@ -401,12 +390,32 @@ def add_from_wiki(word):
     for pm in homograps:
         parser.add_homograph(word, pm)
 
+def add_some():
+    accents = []
+    homographs = [
+                    #['цвета', [3, 'NOUN Case=Gen|Gender=Masc|Number=Sing']],
+                    #['города', [6, 'NOUN Case=Nom|Gender=Masc|Number=Plur']],
+                  ]
+    remove = []
+
+    for x in remove:
+        parser.accents.pop(x, None)
+        parser.homographs.pop(x, None)
+
+    for w in accents:
+        pos = w.find('+')
+        w = w.replace('+', '')
+        parser.add_accent(w, pos)
+
+    for w, pms in homographs:
+        parser.add_homograph(w, pms)
+
 if __name__ == "__main__":
     parser = Parser()
     parser.load()
     # add_from_wiki('дела')
     add_some()
-    # parser.accents.pop('самой', None)
-    # parser.homographs.pop('самой', None)
-    # parser.homographs2.add('самой')
+    # parser.accents.pop('большие', None)
+    # parser.homographs.pop('большие', None)
+    # parser.homographs2.add('порочных')
     parser.save()
