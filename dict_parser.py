@@ -40,7 +40,7 @@ def get_first_vovel_pos(word):
 # for k in homographs:
 #     homographs[k] = [homographs[k], {}]
 
-def compare_tags(pos1, tag1, pos2, tag2):
+def compare_tags(pos1, tag1, pos2, tag2, strict=False):
     synonims =[['DET', 'ADJ', 'ADJS', 'ADJF'],
                ['ADVB', 'ADV'],
                ['VERB', 'GRND', 'INFN']]
@@ -77,13 +77,19 @@ def compare_tags(pos1, tag1, pos2, tag2):
                 return False
 
         if key == 'Case':
-            if key in tags_dict2:
+            if strict:
+                if not key in tags_dict2:
+                    return False
                 if tags_dict1[key] != tags_dict2[key]:
-                    fl = False
-                    if tags_dict1[key] in ['Nom', 'Acc', 'Nomn'] and tags_dict2[key] in ['Nom', 'Acc']: fl = True
-                    if tags_dict1[key] in ['Gen', 'Dat', 'Ins'] and tags_dict2[key] in ['Gen', 'Dat', 'Ins']: fl = True
-                    if not fl:
-                        return False
+                    return False
+            else:
+                if key in tags_dict2:
+                    if tags_dict1[key] != tags_dict2[key]:
+                        fl = False
+                        if tags_dict1[key] in ['Nom', 'Acc', 'Nomn'] and tags_dict2[key] in ['Nom', 'Acc']: fl = True
+                        if tags_dict1[key] in ['Gen', 'Dat', 'Ins'] and tags_dict2[key] in ['Gen', 'Dat', 'Ins']: fl = True
+                        if not fl:
+                            return False
 
 
 
@@ -168,7 +174,7 @@ class Parser():
                                 pos = splits[1]
                                 tag = splits[2]
 
-                            if compare_tags(pos, tag, m_pos, m_tag):
+                            if compare_tags(pos, tag, m_pos, m_tag, True):
                                 if self.homographs[word][1][key] != p: continue
                                 if base is None and m_base is not None:
                                     self.homographs[word][1].pop(key)
@@ -181,7 +187,9 @@ class Parser():
                         if not found:
                             # new form for same position
                             if m in self.homographs[word][1]:
-                                self.homographs[word][1][m] = {self.homographs[word][1][m], p}
+                                if isinstance(self.homographs[word][1][m], int):
+                                    self.homographs[word][1][m] = {self.homographs[word][1][m], p}
+                                else: self.homographs[word][1][m].add(p)
                                 print(self.homographs[word])
                             else:
                                 self.homographs[word][1][m] = p
@@ -252,6 +260,16 @@ class Parser():
     def save_if_changed(self):
         if self.changed:
             self.save()
+
+    def remove_homograph(self, word, p):
+        self.homographs[word][0].remove(p)
+        for m in list(self.homographs[word][1]):
+            if self.homographs[word][1][m] == p:
+                self.homographs[word][1].pop(m)
+        if len(self.homographs[word][0]) == 1:
+            p = self.homographs[word][0].pop()
+            self.homographs.pop(word)
+            self.add_accent(word, p)
 
 
 def parse_forms():

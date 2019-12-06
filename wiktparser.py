@@ -1,6 +1,7 @@
 import re
 from pprint import pprint
-
+import wiktextract
+from lxml import etree
 from requests import get
 import wikitextparser as wtp
 
@@ -109,7 +110,7 @@ def get_wikitext_api_expandtemplates(text, language='ru'):
     return data
 
 def accent(*words):
-    return all(['́' in w for w in words])
+    return all(['́' in w or 'ё' in w for w in words])
 
 
 def search_template_for_argument(template, name):
@@ -147,6 +148,8 @@ def parse_slogi(value):
 def get_word_from_slogi(section):
     template = search_section_for_template(section, 'по-слогам')
     if template is None: template = search_section_for_template(section, 'по слогам')
+
+    if template is None: return None
 
     word_acc = []
     t = ''
@@ -307,8 +310,7 @@ def get_variants_from_section(section):
     variants = []
     word_acc = None
 
-    opencorpora_tag = {}
-    universalD_tag = {}
+
 
     # looking for word
     t = search_section_for_template(section, 'заголовок')
@@ -348,21 +350,22 @@ def get_variants_from_section(section):
     #         break
 
     if word_acc is None or not accent(*word_acc):
-        raise Exception
+        return []
 
+    found_templates = False
     for template in section.templates:
         if known_template(template):
-            addition = parse_template(template, opencorpora_tag, universalD_tag)
-            variants.append([word_acc, opencorpora_tag, universalD_tag])
-            variants += addition
-            opencorpora_tag = {}
-            universalD_tag = {}
+            found_templates = True
+            variants += parse_template(word_acc, template)
+
+    if not found_templates:
+        raise Exception
 
     return variants
 
 
-def parse_wikt_ru(word):
-    parsed = wtp.parse(get_wikitext_api(word))
+def parse_wikt_ru(word, parsed=None):
+    if parsed is None: parsed = wtp.parse(get_wikitext_api(word))
 
     variants = []
 
@@ -442,16 +445,41 @@ if __name__ == "__main__":
     # pprint(parse_wikt_ru('вдали'))
     parser = Parser()
     parser.load()
+
     skip = True
-    for word in list(parser.accents):
-        if word == 'абиетин': skip = False
-        if skip: continue
-        variants = parse_wikt_ru(word)
-        acc_word = word[:parser.accents[word]] + '́' + word[parser.accents[word]:]
-        print(acc_word, len(variants))
+    def word_cb(word, data):
+        global skip
+        if word == 'прыгать': skip = False
+        if skip: return
+
+        if re.fullmatch(r'[а-яёА-ЯЁ]+', word):
+            if count_vovels(word) < 2: return
+            parsed = wtp.parse(data)
+            variants = parse_wikt_ru(word, parsed)
+            # acc_word = word[:parser.accents[word]] + '́' + word[parser.accents[word]:]
+            print(word, len(variants))
+            # pprint(variants)
+
+            add_variants(variants)
+
+    ctx = wiktextract.parse_wiktionary(
+        r'C:\Users\Admin\Downloads\ruwiktionary-20191120-pages-articles-multistream.xml', word_cb,
+        capture_cb=None,
+        languages=["Russian", "Translingual"],
+        translations=False,
+        pronunciations=False,
+        redirects=False)
+
+
+    # for word in list(parser.accents):
+    #     if word == 'абиетин': skip = False
+    #     if skip: continue
+    #     variants = parse_wikt_ru(word)
+    #     acc_word = word[:parser.accents[word]] + '́' + word[parser.accents[word]:]
+    #     print(acc_word, len(variants))
         # pprint(variants)
 
-        add_variants(variants)
+        # add_variants(variants)
 
         # for var in variants:
         #     if len(var[0]) > 1:
